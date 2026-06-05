@@ -1,0 +1,45 @@
+# Prisma
+prisma/generated/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js
+.next/
+out/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+__MACOSX/
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.turbo/
+
+# Temp files
+tmp/
+temp/

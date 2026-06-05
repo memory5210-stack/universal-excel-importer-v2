@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ParsingRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  fileType    String   // excel, word, pdf
+  config      Json     // 规则配置
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  shipments   Shipment[]
+}
+
+model Shipment {
+  id                String   @id @default(cuid())
+  externalCode      String?  // 外部编码
+  storeName         String?  // 收货门店 (A 组)
+  receiverName      String?  // 收件人姓名 (B 组)
+  receiverPhone     String?  // 收件人电话 (B 组)
+  receiverAddress   String?  // 收件人地址 (B 组)
+  skuCode           String
+  skuName           String
+  skuQuantity       Int
+  skuSpecification  String?
+  remarks           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  parsingRuleId     String?
+  parsingRule       ParsingRule? @relation(fields: [parsingRuleId], references: [id])
+
+  @@index([externalCode])
+  @@index([receiverName])
+  @@index([createdAt])
+}
