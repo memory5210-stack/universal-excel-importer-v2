@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "outputDirectory": ".next",
+  "regions": ["hnd1"],
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "DEEPSEEK_API_KEY": "@deepseek-api-key"
+  }
+}
