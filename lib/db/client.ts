@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaNeon } from '@prisma/adapter-neon'
-import { neon } from '@neondatabase/serverless'
 
 // 懒加载 Prisma Client
 let _prisma: PrismaClient | undefined
@@ -14,8 +13,15 @@ export const getPrisma = () => {
       throw new Error(`DATABASE_URL 未配置或格式错误：${connectionString ? `长度=${connectionString.length}` : 'undefined'}`)
     }
     
-    const neonClient = neon(connectionString)
-    const adapter = new PrismaNeon(neonClient)
+    // 创建连接池配置
+    const poolConfig = {
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    }
+    
+    const adapter = new PrismaNeon(poolConfig)
     _prisma = new PrismaClient({ adapter })
   }
   return _prisma
