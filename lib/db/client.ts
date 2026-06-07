@@ -5,7 +5,13 @@ let _prisma: PrismaClient | undefined
 
 export const getPrisma = () => {
   if (!_prisma) {
-    _prisma = new PrismaClient()
+    _prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
+    })
   }
   return _prisma
 }
