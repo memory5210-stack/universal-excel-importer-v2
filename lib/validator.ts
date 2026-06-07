@@ -14,21 +14,12 @@ export function validateShipmentData(data: ShipmentData[]): ValidationError[] {
   const errors: ValidationError[] = [];
 
   data.forEach((row, index) => {
-    // A 组和 B 组至少填一组
+    // A 组和 B 组至少填一组（可选）
     const hasA = !!row.storeName;
     const hasB = !!(row.receiverName || row.receiverPhone || row.receiverAddress);
 
-    if (!hasA && !hasB) {
-      errors.push({
-        row: index,
-        field: 'storeName',
-        message: 'A 组（收货门店）或 B 组（收件人信息）至少填一组',
-        type: 'error'
-      });
-    }
-
-    // B 组三个字段必须同时填写
-    if (hasB) {
+    // 如果填写了 B 组信息，则三个字段必须同时填写
+    if (hasB && !hasA) {
       if (!row.receiverName) {
         errors.push({
           row: index,
