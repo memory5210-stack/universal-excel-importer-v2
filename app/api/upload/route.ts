@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // 调试环境变量
+    console.log('=== 环境变量检查 ===');
+    console.log('DATABASE_URL:', process.env.DATABASE_URL ? `存在，长度=${process.env.DATABASE_URL.length}` : '不存在');
+    console.log('DATABASE_URL preview:', process.env.DATABASE_URL?.substring(0, 30) + '...');
+    
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
