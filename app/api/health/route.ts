@@ -10,11 +10,12 @@ export async function GET() {
     // 尝试连接数据库
     await prisma.$connect();
     
-    // 检查表是否存在
-    const tables = await prisma.$queryRawUnsafe<{ tablename: string }[]>(`
-      SELECT tablename FROM pg_tables 
+    // 检查表是否存在 - 使用简单查询
+    const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+      SELECT tablename::text as tablename 
+      FROM pg_tables 
       WHERE schemaname = 'public'
-    `);
+    `;
     
     return NextResponse.json({
       success: true,
