@@ -1,9 +1,23 @@
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+// 懒加载 Prisma Client，避免构建时初始化
+let _prisma: PrismaClient | undefined
+
+export const getPrisma = () => {
+  if (!_prisma) {
+    _prisma = new PrismaClient({
+      datasourceUrl: process.env.DATABASE_URL || undefined,
+    })
+  }
+  return _prisma
 }
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+// 为了兼容性导出 prisma（但只在运行时使用）
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getPrisma()
+    return (client as any)[prop]
+  },
+})
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+export default prisma

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/client';
+import { getPrisma } from '@/lib/db/client';
 
 // 获取所有规则
 export async function GET() {
   try {
-    const rules = await prisma.parsingRule.findMany({
+    const rules = await getPrisma().parsingRule.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rule = await prisma.parsingRule.create({
+    const rule = await getPrisma().parsingRule.create({
       data: {
         name,
         description: description || null,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/client';
+import { getPrisma } from '@/lib/db/client';
 
 export async function GET(
   request: NextRequest,
@@ -8,7 +8,7 @@ export async function GET(
   try {
     const { ruleId } = await params;
     
-    const rule = await prisma.parsingRule.findUnique({
+    const rule = await getPrisma().parsingRule.findUnique({
       where: { id: ruleId },
       include: {
         _count: {
@@ -55,7 +55,7 @@ export async function PUT(
     const body = await request.json();
     const { name, description, fileType, config } = body;
 
-    const rule = await prisma.parsingRule.update({
+    const rule = await getPrisma().parsingRule.update({
       where: { id: ruleId },
       data: {
         name: name || undefined,
@@ -92,7 +92,7 @@ export async function DELETE(
   try {
     const { ruleId } = await params;
     
-    await prisma.parsingRule.delete({
+    await getPrisma().parsingRule.delete({
       where: { id: ruleId }
     });
 

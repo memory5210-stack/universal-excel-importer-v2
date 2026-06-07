@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/client';
+import { getPrisma } from '@/lib/db/client';
 import type { ShipmentData } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 批量插入数据库
-    const created = await prisma.shipment.createMany({
+    const created = await getPrisma().shipment.createMany({
       data: shipments.map(shipment => ({
         externalCode: shipment.externalCode || null,
         storeName: shipment.storeName || null,
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 获取已创建的运单（排除重复的）
-    const createdShipments = await prisma.shipment.findMany({
+    const createdShipments = await getPrisma().shipment.findMany({
       where: {
         createdAt: {
           gte: new Date(Date.now() - 60000) // 最近 1 分钟内创建的
@@ -88,8 +88,8 @@ export async function GET(request: NextRequest) {
     } : {};
 
     const [total, shipments] = await Promise.all([
-      prisma.shipment.count({ where }),
-      prisma.shipment.findMany({
+      getPrisma().shipment.count({ where }),
+      getPrisma().shipment.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
