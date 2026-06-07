@@ -43,24 +43,39 @@ export async function POST(request: NextRequest) {
         const rawData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
         
         console.log('Sheet:', sheetName, '行数:', rawData.length);
-        console.log('前 3 行数据:', rawData.slice(0, 3));
+        console.log('前 5 行数据:', rawData.slice(0, 5));
 
         if (rawData.length === 0) continue;
 
-        // 查找表头行
+        // 查找表头行 - 找包含数据列最多的行
         let headerRowIndex = 0;
         let headers: string[] = [];
 
         for (let i = 0; i < Math.min(rawData.length, 15); i++) {
           const row = rawData[i];
+          const nonEmptyCount = row.filter((c: any) => c && String(c).trim().length > 0).length;
+          
+          // 跳过空行或只有 1-2 个值的行
+          if (nonEmptyCount < 3) continue;
+          
           const rowStr = row.join(' ').toLowerCase();
           
-          if (rowStr.includes('sku') || rowStr.includes('编码') || rowStr.includes('名称') || 
-              rowStr.includes('数量') || rowStr.includes('单品') || rowStr.includes('货品')) {
+          // 优先找包含典型表头关键词的行
+          const isHeaderRow = rowStr.includes('sku') || rowStr.includes('编码') || rowStr.includes('名称') || 
+                              rowStr.includes('数量') || rowStr.includes('单品') || rowStr.includes('货品') ||
+                              rowStr.includes('商品') || rowStr.includes('规格') || rowStr.includes('门店');
+          
+          if (isHeaderRow) {
             headerRowIndex = i;
             headers = row.map((h: any) => String(h || '').trim());
             console.log('找到表头在第', i, '行，表头:', headers);
             break;
+          }
+          
+          // 如果前 3 行都没有典型表头，使用非空单元格最多的行
+          if (i === 0 || nonEmptyCount > headers.length) {
+            headerRowIndex = i;
+            headers = row.map((h: any) => String(h || '').trim());
           }
         }
 
