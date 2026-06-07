@@ -79,15 +79,15 @@ export async function POST(request: NextRequest) {
         };
 
         const fieldIndex = {
-          skuCode: findIndex(['编码', 'sku']),
-          skuName: findIndex(['名称', '品名']),
-          skuQuantity: findIndex(['数量', '件数']),
-          skuSpecification: findIndex(['规格', '型号']),
-          externalCode: findIndex(['单号', '编码']),
-          storeName: findIndex(['门店', '店铺', '仓库', '超市']),
-          receiverName: findIndex(['收货人', '收件人']),
-          receiverPhone: findIndex(['电话', '手机']),
-          receiverAddress: findIndex(['地址']),
+          skuCode: findIndex(['sku 编码', '商品编码', '产品编码', '货品编码', '货号', '款号', '编码', 'sku', 'code']),
+          skuName: findIndex(['sku 名称', '商品名称', '产品名称', '货品名称', '品名', '名称', 'name']),
+          skuQuantity: findIndex(['数量', '件数', '_qty', 'qty', 'Quantity', 'num']),
+          skuSpecification: findIndex(['规格', '型号', 'size', 'spec']),
+          externalCode: findIndex(['单号', '订单号', '外部编号', '外部编码', '单据号']),
+          storeName: findIndex(['门店', '店铺', '仓库', '超市', '库房', '店仓', 'store', 'warehouse']),
+          receiverName: findIndex(['收货人', '收件人', '客户', '顾客', '姓名']),
+          receiverPhone: findIndex(['电话', '手机', '联系方式', '手机号', 'phone', 'tel']),
+          receiverAddress: findIndex(['地址', '收货地址', '详细地址', 'address']),
         };
 
         console.log('字段索引:', fieldIndex);
