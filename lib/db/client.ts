@@ -1,11 +1,16 @@
 import { PrismaClient } from '@prisma/client'
+import { PrismaNeon } from '@prisma/adapter-neon'
+import { neon } from '@neondatabase/serverless'
 
-// 懒加载 Prisma Client，使用 prisma.config.ts 中的配置
+// 懒加载 Prisma Client
 let _prisma: PrismaClient | undefined
 
 export const getPrisma = () => {
   if (!_prisma) {
-    _prisma = new PrismaClient({})
+    const connectionString = process.env.DATABASE_URL || ''
+    const neonClient = neon(connectionString)
+    const adapter = new PrismaNeon(neonClient)
+    _prisma = new PrismaClient({ adapter })
   }
   return _prisma
 }
