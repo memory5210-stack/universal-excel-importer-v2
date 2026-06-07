@@ -5,9 +5,7 @@ let _prisma: PrismaClient | undefined
 
 export const getPrisma = () => {
   if (!_prisma) {
-    _prisma = new PrismaClient({
-      datasourceUrl: process.env.DATABASE_URL || undefined,
-    })
+    _prisma = new PrismaClient()
   }
   return _prisma
 }
