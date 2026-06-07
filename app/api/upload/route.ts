@@ -47,57 +47,63 @@ export async function POST(request: NextRequest) {
 
         if (rawData.length === 0) continue;
 
-        // 查找表头行 - 智能检测
-        let headerRowIndex = 0;
-        let headers: string[] = [];
-        let foundHeader = false;
+      // 智能表头检测
+      const headerKeywords = [
+        'sku', '商品', '产品', '货品', '货物', '单品', '物料', '物品',
+        '编码', '货号', '款号', 'code', 'spu', 'id',
+        '名称', '品名', 'name', '品牌',
+        '数量', '件数', 'qty', 'quantity', 'num',
+        '规格', '型号', 'size', 'spec', '单位',
+        '门店', '店铺', '仓库', 'store', 'warehouse', '客户',
+        '收货', '收件', '联系', '姓名', '手机', '电话', 'phone',
+        '地址', 'address', '配送', '送货'
+      ];
 
-        // 典型表头关键词（中英文）
-        const headerKeywords = [
-          'sku', '商品', '产品', '货品', '单品',
-          '编码', '货号', '款号', 'code',
-          '名称', '品名', 'name',
-          '数量', '件数', 'qty', 'quantity', 'num',
-          '规格', '型号', 'size', 'spec',
-          '门店', '店铺', '仓库', 'store', 'warehouse',
-          '收货人', '收件人', '客户', '姓名',
-          '电话', '手机', 'contact', 'phone',
-          '地址', 'address'
-        ];
+      let headerRowIndex = 0;
+      let headers: string[] = [];
+      let foundHeader = false;
 
-        for (let i = 0; i < Math.min(rawData.length, 15); i++) {
+      // 第一轮：找前 10 行中包含关键词最多的行
+      for (let i = 0; i < Math.min(rawData.length, 10); i++) {
+        const row = rawData[i];
+        const validCells = row.filter((c: any) => c && String(c).trim().length > 0);
+        
+        // 跳过只有 1-2 个单元格的行
+        if (validCells.length < 2) continue;
+        
+        const rowText = validCells.join(' ').toLowerCase();
+        const matchCount = headerKeywords.filter(k => rowText.includes(k)).length;
+        
+        console.log(`行${i}: ${validCells.length}个单元格，匹配${matchCount}个关键词`, validCells.slice(0, 10));
+        
+        // 匹配到 2 个以上关键词，认为是表头
+        if (matchCount >= 2) {
+          headerRowIndex = i;
+          headers = row.map((h: any) => (h ? String(h).trim() : ''));
+          console.log('✓ 找到表头在第', i, '行，匹配', matchCount, '个关键词');
+          foundHeader = true;
+          
+          // 如果匹配到 5 个以上，直接确认
+          if (matchCount >= 5) break;
+        }
+      }
+
+      // 第二轮：如果没找到，使用非空单元格最多的前 3 行
+      if (!foundHeader && rawData.length > 0) {
+        let maxCells = 0;
+        for (let i = 0; i < Math.min(rawData.length, 5); i++) {
           const row = rawData[i];
-          const nonEmptyCount = row.filter((c: any) => c && String(c).trim().length > 0).length;
-          
-          // 跳过空行或只有 1-2 个值的行
-          if (nonEmptyCount < 2) continue;
-          
-          const rowStr = row.join(' ').toLowerCase();
-          
-          // 统计匹配到的关键词数量
-          const matchCount = headerKeywords.filter(k => rowStr.includes(k)).length;
-          
-          // 如果匹配到 2 个以上关键词，认为是表头
-          if (matchCount >= 2) {
+          const validCells = row.filter((c: any) => c && String(c).trim()).length;
+          if (validCells > maxCells) {
+            maxCells = validCells;
             headerRowIndex = i;
-            headers = row.map((h: any) => String(h || '').trim());
-            console.log('找到表头在第', i, '行，匹配', matchCount, '个关键词，表头:', headers);
-            foundHeader = true;
-            break;
-          }
-          
-          // 如果没有找到典型表头，选择非空单元格最多的行
-          if (!foundHeader && (i === 0 || nonEmptyCount > headers.length)) {
-            headerRowIndex = i;
-            headers = row.map((h: any) => String(h || '').trim());
+            headers = row.map((h: any) => (h ? String(h).trim() : ''));
           }
         }
+        console.log('使用非空单元格最多的行作为表头（行', headerRowIndex, '）:', headers.slice(0, 10));
+      }
 
-        if (!foundHeader && rawData.length > 0 && headers.length > 0) {
-          console.log('使用非空单元格最多的行作为表头 (行', headerRowIndex + '):', headers);
-        }
-
-        // 字段映射 - 扩展关键词匹配
+        // 字段映射 - 超宽泛关键词匹配
         const findIndex = (candidates: string[]) => {
           for (let i = 0; i < headers.length; i++) {
             const header = (headers[i] || '').toLowerCase();
@@ -106,28 +112,78 @@ export async function POST(request: NextRequest) {
               return i;
             }
           }
+          // 第二轮：模糊匹配（去除空格、特殊字符后匹配）
+          const cleanHeader = header.replace(/[\s_-]/g, '');
+          for (let i = 0; i < headers.length; i++) {
+            const header = (headers[i] || '').toLowerCase();
+            const clean = header.replace(/[\s_-]/g, '');
+            if (candidates.some(c => c.replace(/[\s_-]/g, '') === clean || clean.includes(c.replace(/[\s_-]/g, '')))) {
+              return i;
+            }
+          }
           return -1;
         };
 
         const fieldIndex = {
-          // SKU 编码：匹配包含"编码"、"sku"、"code"、"货号"等的列
-          skuCode: findIndex(['sku 编码', '商品编码', '产品编码', '货品编码', '货号', '款号', '编码', 'sku', 'code', '商品 id', 'spu']),
-          // SKU 名称：匹配包含"名称"、"品名"、"name"等的列
-          skuName: findIndex(['sku 名称', '商品名称', '产品名称', '货品名称', '品名', '名称', 'name', '商品']),
-          // 数量：匹配包含"数量"、"qty"、"quantity"等的列
-          skuQuantity: findIndex(['数量', '件数', 'qty', 'quantity', 'num', '发货数', '出库数']),
-          // 规格：匹配包含"规格"、"型号"、"size"等的列
-          skuSpecification: findIndex(['规格', '型号', 'size', 'spec', '单位']),
-          // 外部编码：匹配包含"单号"、"订单号"等的列
-          externalCode: findIndex(['单号', '订单号', '外部编号', '外部编码', '单据号', '出库单号']),
-          // 门店：匹配包含"门店"、"店铺"、"仓库"等的列
-          storeName: findIndex(['门店', '店铺', '仓库', '超市', '库房', '店仓', 'store', 'warehouse', '品牌']),
-          // 收件人：匹配包含"收货人"、"收件人"、"姓名"等的列
-          receiverName: findIndex(['收货人', '收件人', '客户', '顾客', '姓名', '联系人']),
-          // 电话：匹配包含"电话"、"手机"、"联系方式"等的列
-          receiverPhone: findIndex(['电话', '手机', '联系方式', '手机号', 'phone', 'tel', '联系电话']),
-          // 地址：匹配包含"地址"、"收货地址"等的列
-          receiverAddress: findIndex(['地址', '收货地址', '详细地址', 'address', '配送地址']),
+          // SKU 编码：超宽泛匹配
+          skuCode: findIndex([
+            'sku 编码', '商品编码', '产品编码', '货品编码', '货物编码',
+            '货号', '款号', '编码', 'sku', 'code', '商品 id', 'spu',
+            '单品编码', '物料编码', '物品编号', 'goods code', 'item code',
+            '产品号', '商品号', '货品号'
+          ]),
+          // SKU 名称：超宽泛匹配
+          skuName: findIndex([
+            'sku 名称', '商品名称', '产品名称', '货品名称', '货物名称',
+            '品名', '名称', 'name', '商品', '产品', '货品', '物品',
+            '单品名称', '物料名称', '品名规格', '商品品名', 'goods name', 'item name',
+            '品牌名称', '品牌'
+          ]),
+          // 数量：超宽泛匹配
+          skuQuantity: findIndex([
+            '数量', '件数', 'qty', 'quantity', 'num', '发货数', '出库数',
+            '发货数量', '出库数量', '订货数量', '订单数量', '销售数量',
+            '总数量', '总数', '单品数量', '商品数量', '应发数量', '实发数量',
+            '发货件数', '出库件数', '订货件数', '数量 (件)', 'unit', '数量 1'
+          ]),
+          // 规格：超宽泛匹配
+          skuSpecification: findIndex([
+            '规格', '型号', 'size', 'spec', '单位', '规格型号',
+            '商品规格', '产品型号', '单品规格', '规格 ( unit)', '包装规格',
+            '等级', '颜色', '尺码'
+          ]),
+          // 外部编码：超宽泛匹配
+          externalCode: findIndex([
+            '单号', '订单号', '外部编号', '外部编码', '单据号', '出库单号',
+            '发货单号', '订单编号', '客户单号', '销售单号', '调拨单号',
+            '配送单号', '运单号', '订单 id', '单号 1'
+          ]),
+          // 门店：超宽泛匹配
+          storeName: findIndex([
+            '门店', '店铺', '仓库', '超市', '库房', '店仓', 'store', 'warehouse',
+            '收货门店', '发货门店', '门店名称', '店铺名称', '仓库名称',
+            '客户名称', '客户', '订货客户', '销售客户', '档口', '前置仓',
+            '渠道', '区域', '城市', '公司', '收货方', '买方'
+          ]),
+          // 收件人：超宽泛匹配
+          receiverName: findIndex([
+            '收货人', '收件人', '客户', '顾客', '姓名', '联系人',
+            '收货联系人', '收件联系人', '客户姓名', '收货方', '买方姓名',
+            '收货人姓名', '收件人姓名', '客户名称'
+          ]),
+          // 电话：超宽泛匹配
+          receiverPhone: findIndex([
+            '电话', '手机', '联系方式', '手机号', 'phone', 'tel', '联系电话',
+            '收货电话', '收件电话', '客户电话', '手机号码', '电话号码',
+            '收货人电话', '收件人电话', '联系人电话', '手机 1', '联系方式 1',
+            '收货人手机', '收件人手机'
+          ]),
+          // 地址：超宽泛匹配
+          receiverAddress: findIndex([
+            '地址', '收货地址', '详细地址', 'address', '配送地址',
+            '收货人地址', '收件人地址', '客户地址', '收货详细地址',
+            '送货地址', '配送详细地址', '收货地点', '收货信息'
+          ]),
         };
 
         console.log('字段索引:', fieldIndex);
