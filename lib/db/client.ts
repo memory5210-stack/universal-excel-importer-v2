@@ -30,13 +30,3 @@ export const prisma = new Proxy({} as PrismaClient, {
 })
 
 export default prisma
-
-// 为了兼容性导出 prisma（但只在运行时使用）
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    const client = getPrisma()
-    return (client as any)[prop]
-  },
-})
-
-export default prisma
