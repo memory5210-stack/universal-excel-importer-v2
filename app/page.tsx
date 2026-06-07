@@ -80,10 +80,13 @@ export default function Home() {
       }, 100);
 
       setTimeout(() => {
-        setParseResult(result.data);
+        setParseResult({
+          ...result.data,
+          data: result.data.shipments || []
+        });
         setUploading(false);
         setProgress(100);
-        toast.success(`解析成功：${result.data.parsedData?.length || 0} 条数据`);
+        toast.success(`解析成功：${result.data.totalRows || 0} 条数据`);
       }, 1000);
     } catch (error) {
       console.error('Parse error:', error);
