@@ -1,17 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 
-// 懒加载 Prisma Client，避免构建时初始化
+// 懒加载 Prisma Client，使用 prisma.config.ts 中的配置
 let _prisma: PrismaClient | undefined
 
 export const getPrisma = () => {
   if (!_prisma) {
-    _prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
-    })
+    _prisma = new PrismaClient()
   }
   return _prisma
 }
