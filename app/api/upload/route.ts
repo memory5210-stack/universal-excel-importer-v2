@@ -91,9 +91,15 @@ export async function POST(request: NextRequest) {
         };
 
         console.log('字段索引:', fieldIndex);
+        console.log('表头映射分析:');
+        console.log('  - headers:', headers);
+        console.log('  - skuCode index:', fieldIndex.skuCode, '-> header:', headers[fieldIndex.skuCode]);
+        console.log('  - skuName index:', fieldIndex.skuName, '-> header:', headers[fieldIndex.skuName]);
+        console.log('  - skuQuantity index:', fieldIndex.skuQuantity, '-> header:', headers[fieldIndex.skuQuantity]);
 
         // 解析数据行
         let rowCount = 0;
+        let skipCount = 0;
         for (let i = headerRowIndex + 1; i < rawData.length; i++) {
           const row = rawData[i];
           if (!row || row.length === 0) continue;
@@ -101,12 +107,22 @@ export async function POST(request: NextRequest) {
           const rowStr = row.join(' ');
           if (rowStr.includes('合计') || rowStr.includes('总计')) continue;
 
+          const rowValues = {
+            skuCodeRaw: row[fieldIndex.skuCode],
+            skuNameRaw: row[fieldIndex.skuName],
+            quantityRaw: row[fieldIndex.skuQuantity],
+            allValues: row.filter((c: any) => c),
+          };
+          
           const skuCode = row[fieldIndex.skuCode] || '';
           const skuName = row[fieldIndex.skuName] || '';
           
-          if (!skuCode && !skuName && !row.some((c: any) => c)) continue;
+          if (!skuCode && !skuName && !row.some((c: any) => c)) {
+            skipCount++;
+            continue;
+          }
 
-          const shipment: any = {
+          const shipment = {
             skuCode: String(skuCode || '').trim(),
             skuName: String(skuName || '').trim(),
             skuQuantity: parseInt(String(row[fieldIndex.skuQuantity] || 0).replace(/[^\d]/g, '')) || 0,
@@ -121,10 +137,16 @@ export async function POST(request: NextRequest) {
           if (shipment.skuCode || shipment.skuName) {
             shipments.push(shipment);
             rowCount++;
+            if (rowCount <= 3) {
+              console.log(`第${rowCount}条数据:`, shipment);
+            }
+          } else {
+            console.log('跳过空行:', { index: i, values: rowValues });
+            skipCount++;
           }
         }
 
-        console.log('Sheet:', sheetName, '解析出', rowCount, '条数据');
+        console.log('Sheet:', sheetName, '解析出', rowCount, '条数据，跳过', skipCount, '行');
       }
     } else if (fileExt === 'docx') {
       const mammoth = await import('mammoth');
