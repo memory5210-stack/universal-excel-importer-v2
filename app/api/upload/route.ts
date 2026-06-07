@@ -3,7 +3,14 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
-import pdfParse from 'pdf-parse/pdf-parse';
+import pdfParse from 'pdf-parse';
+
+// 动态导入 pdf-parse 以避免 Turbopack 问题
+async function parsePDFBuffer(buffer: Buffer) {
+  const pdfParseModule = await import('pdf-parse');
+  const pdfParse = pdfParseModule.default || pdfParseModule;
+  return (pdfParse as any)(buffer);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +72,6 @@ async function parseExcel(buffer: Buffer) {
   const worksheet = workbook.Sheets[sheetName];
   const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
   
-  // TODO: 应用解析规则进行数据映射和清洗
   return rawData
     .filter((row: any[]) => row.length > 0)
     .map((row: any[], index: number) => ({
@@ -78,7 +84,6 @@ async function parseWord(buffer: Buffer) {
   const result = await mammoth.extractRawText({ buffer });
   const text = result.value;
   
-  // TODO: 使用 AI 解析 Word 文本结构
   return [{
     row: 0,
     data: [text]
@@ -86,10 +91,9 @@ async function parseWord(buffer: Buffer) {
 }
 
 async function parsePDF(buffer: Buffer) {
-  const data = await pdfParse(buffer);
+  const data = await parsePDFBuffer(buffer);
   const text = data.text;
   
-  // TODO: 使用 AI 解析 PDF 结构
   return [{
     row: 0,
     data: [text]
