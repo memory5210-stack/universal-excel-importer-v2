@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
-import XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
-import pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse/pdf-parse';
 
 export async function POST(request: NextRequest) {
   try {
