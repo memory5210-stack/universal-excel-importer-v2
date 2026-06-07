@@ -9,6 +9,7 @@ import type { ValidationError } from '@/lib/validator';
 export default function Home() {
   const toast = useToast();
   const [dragActive, setDragActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [parseResult, setParseResult] = useState<any>(null);
   const [selectedRule, setSelectedRule] = useState('');
@@ -34,6 +35,7 @@ export default function Home() {
     
     const files = e.dataTransfer.files;
     if (files && files[0]) {
+      setSelectedFile(files[0]);
       handleFile(files[0]);
     }
   }, []);
@@ -41,6 +43,7 @@ export default function Home() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
+      setSelectedFile(files[0]);
       handleFile(files[0]);
     }
   };
@@ -95,8 +98,51 @@ export default function Home() {
     }
   };
 
-  const handleAIAnalyze = () => {
-    toast.info('AI 分析功能开发中...');
+  const handleAIAnalyze = async () => {
+    if (!selectedFile) {
+      toast.warning('请先上传文件');
+      return;
+    }
+
+    setUploading(true);
+    setProgress(0);
+    toast.info('AI 正在分析文件结构...');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch('/api/rules/generate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        toast.error(`AI 分析失败：${result.error}`);
+        setUploading(false);
+        return;
+      }
+
+      // 显示 AI 分析结果
+      const { fieldMapping, confidence, notes } = result.data.aiAnalysis;
+      
+      const mappingText = Object.entries(fieldMapping || {})
+        .filter(([_, v]) => v)
+        .map(([k, v]) => `${k} → ${v}`)
+        .join('\n');
+
+      toast.info(
+        `AI 分析完成！\n置信度：${confidence}%\n\n识别到的字段映射:\n${mappingText}\n\n说明：${notes}`
+      );
+
+      // TODO: 打开规则配置对话框，让用户确认/修改映射
+    } catch (error) {
+      console.error('AI analyze error:', error);
+      toast.error('AI 分析失败，请重试');
+      setUploading(false);
+    }
   };
 
   const handleValidate = () => {
