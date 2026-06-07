@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>万能导入 V2 - Vercel 部署指南</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 48px;
+    }
+    h1 {
+      font-size: 32px;
+      color: #0fc6c2;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .subtitle {
+      text-align: center;
+      color: #86909c;
+      margin-bottom: 32px;
+    }
+    .step {
+      background: #f7f8fa;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border-left: 4px solid #0fc6c2;
+    }
+    .step-number {
+      display: inline-block;
+      background: #0fc6c2;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 32px;
+      font-weight: bold;
+      margin-right: 12px;
+    }
+    .step-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1d2129;
+      margin-bottom: 12px;
+    }
+    .step-content {
+      color: #4e5969;
+      line-height: 1.8;
+      margin-left: 44px;
+    }
+    .step-content ul {
+      padding-left: 20px;
+      margin: 12px 0;
+    }
+    .step-content li {
+      margin-bottom: 8px;
+    }
+    .btn {
+      display: inline-block;
+      background: #0fc6c2;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 500;
+      margin: 8px 8px 0 0;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #0bada9;
+    }
+    .btn-outline {
+      background: white;
+      color: #0fc6c2;
+      border: 2px solid #0fc6c2;
+    }
+    .btn-outline:hover {
+      background: #e8fafa;
+    }
+    .alert {
+      background: #fff7e8;
+      border: 1px solid #ffe4ba;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .alert-info {
+      background: #e8fafa;
+      border-color: #b5e8e8;
+    }
+    .alert-success {
+      background: #d4f4dd;
+      border-color: #a3e1b4;
+    }
+    .code {
+      background: #1d2129;
+      color: #00ff88;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin: 12px 0;
+      overflow-x: auto;
+    }
+    .progress-bar {
+      background: #e5e6eb;
+      border-radius: 999px;
+      height: 8px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+    .progress-fill {
+      background: linear-gradient(90deg, #0fc6c2, #0b6e6e);
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .checklist {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+    .checklist li {
+      padding: 8px 12px;
+      margin: 4px 0;
+      border-radius: 6px;
+      background: #f7f8fa;
+    }
+    .checklist li[data-checked="true"] {
+      background: #e8fafa;
+      color: #0b6e6e;
+    }
+    .checklist li:before {
+      content: "⬜";
+      margin-right: 8px;
+    }
+    .checklist li[data-checked="true"]:before {
+      content: "✅";
+    }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid #d0d0d0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      float: right;
+      font-size: 12px;
+    }
+    .copy-btn:hover {
+      background: #f0f0f0;
+    }
+    .accordion {
+      border: 1px solid #e5e6eb;
+      border-radius: 8px;
+      margin: 12px 0;
+    }
+    .accordion-header {
+      padding: 16px;
+      background: #fafbfc;
+      cursor: pointer;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .accordion-header:hover {
+      background: #f0f0f0;
+    }
+    .accordion-content {
+      padding: 16px;
+      display: none;
+      border-top: 1px solid #e5e6eb;
+    }
+    .accordion-content.open {
+      display: block;
+    }
+    a {
+      color: #0fc6c2;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 万能导入 V2 - Vercel 部署指南</h1>
+    <p class="subtitle">5 分钟完成部署，即刻访问您的在线应用</p>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">1</span>
+        创建 Neon 数据库
+      </div>
+      <div class="step-content">
+        <ol>
+          <li>访问 <a href="https://neon.tech" target="_blank">neon.tech</a> 并登录</li>
+          <li>点击 <strong>"New Project"</strong></li>
+          <li>填写项目名称：<code>universal-import-db</code></li>
+          <li>点击 <strong>"Create"</strong></li>
+          <li>在 <strong>Connection Details</strong> 区域复制连接字符串（包含 <code>?sslmode=require</code>）</li>
+        </ol>
+        <div class="code">
+          postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+        </div>
+        <a href="https://neon.tech" target="_blank" class="btn">打开 Neon</a>
+        <div class="alert alert-success" style="margin-top: 12px;">
+          ✅ 完成后保存连接字符串，稍后需要填入 Vercel
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">2</span>
+        获取 DeepSeek API Key
+      </div>
+      <div class="step-content">
+        <ol>
+          <li>访问 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 开放平台</a></li>
+          <li>登录后进入 <strong>"API Keys"</strong> 页面</li>
+          <li>点击 <strong>"Create API Key"</strong></li>
+          <li>复制生成的 Key（以 <code>sk-</code> 开头）</li>
+        </ol>
+        <a href="https://platform.deepseek.com" target="_blank" class="btn">打开 DeepSeek</a>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">3</span>
+        部署到 Vercel
+      </div>
+      <div class="step-content">
+        <ol>
+          <li>访问 <a href="https://vercel.com/new" target="_blank">vercel.com/new</a></li>
+          <li>登录 Vercel（支持 GitHub 账号）</li>
+          <li>点击 <strong>"Import Git Repository"</strong></li>
+          <li>搜索并选择 <code>universal-excel-importer-v2</code></li>
+          <li>点击 <strong>"Import"</strong> 导入仓库</li>
+        </ol>
+        <a href="https://vercel.com/new?utm_source=universal-excel-importer-v2" target="_blank" class="btn">开始部署</a>
+        <div class="alert alert-info" style="margin-top: 12px;">
+          💡 部署约需 2-3 分钟
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-title">
+        <span class="step-number">4</span>
+        配置环境变量
+      </div>
+      <div class="step-content">
+        <p>在 "Configure Project" 页面点击 <strong>"Add Environment Variable"</strong> 添加：</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 12px 0;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 8px; background: #e8fafa; color: #0b6e6e;">Name</th>
+              <th style="text-align: left; padding: 8px; background: #e8fafa; color: #0b6e6e;">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e6eb;"><code>DATABASE_URL</code></td>
+              <td style="padding: 8px; border: 1px solid #e5e6eb;">步骤 1 复制的 Neon 连接字符串</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #e5e6eb;"><code>DEEPSEEK_API_KEY</code></td>
+              <td style="padding: 8px; border: 1px solid #e5e6eb;">步骤 2 获取的 API Key</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>然后点击 <strong>"Deploy"
