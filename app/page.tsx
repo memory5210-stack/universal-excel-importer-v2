@@ -1,14 +1,20 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Plus, Download, Save, Wand2 } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Plus, Download, Save, Wand2, Loader2 } from 'lucide-react';
+import { useToast } from '@/components/Toast';
+import { validateShipmentData, getFieldErrors } from '@/lib/validator';
+import type { ValidationError } from '@/lib/validator';
 
 export default function Home() {
+  const toast = useToast();
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [parseResult, setParseResult] = useState<any>(null);
   const [selectedRule, setSelectedRule] = useState('');
-  const [rules, setRules] = useState<any[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
 
   // 处理文件拖放
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -41,49 +47,77 @@ export default function Home() {
 
   const handleFile = async (file: File) => {
     setUploading(true);
+    setProgress(0);
+    toast.info(`开始解析文件：${file.name}`);
     
-    // TODO: 实际的上传和解析逻辑
     const formData = new FormData();
     formData.append('file', file);
     formData.append('ruleId', selectedRule);
 
     try {
-      // 模拟解析结果
-      setTimeout(() => {
-        setParseResult({
-          data: [
-            {
-              externalCode: 'PS2512220005001',
-              storeName: '尹三顺自助烤肉（银泰店）',
-              skuCode: '10001',
-              skuName: '精品肥牛',
-              skuQuantity: 5,
-              skuSpecification: '500g/盒'
-            }
-          ],
-          totalRows: 1,
-          validRows: 1
-        });
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        toast.error(`解析失败：${result.error}`);
         setUploading(false);
+        return;
+      }
+
+      // 模拟进度条
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(interval);
+            return 100;
+          }
+          return prev + 10;
+        });
+      }, 100);
+
+      setTimeout(() => {
+        setParseResult(result.data);
+        setUploading(false);
+        setProgress(100);
+        toast.success(`解析成功：${result.data.parsedData?.length || 0} 条数据`);
       }, 1000);
     } catch (error) {
       console.error('Parse error:', error);
+      toast.error('解析失败，请重试');
       setUploading(false);
     }
   };
 
-  const handleAIAnalyze = async () => {
-    // TODO: AI 分析文件并生成规则
-    alert('AI 分析功能实现中...');
+  const handleAIAnalyze = () => {
+    toast.info('AI 分析功能开发中...');
   };
 
-  const exportToExcel = () => {
-    if (!parseResult?.data || parseResult.data.length === 0) {
-      alert('没有可导出的数据');
+  const handleValidate = () => {
+    if (!parseResult?.data) {
+      toast.warning('没有可验证的数据');
       return;
     }
 
-    // 动态导入 xlsx 库并导出 Excel
+    const errors = validateShipmentData(parseResult.data);
+    setValidationErrors(errors);
+
+    if (errors.length === 0) {
+      toast.success('数据校验通过！');
+    } else {
+      toast.error(`发现 ${errors.length} 个错误，请修正后提交`);
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!parseResult?.data || parseResult.data.length === 0) {
+      toast.warning('没有可导出的数据');
+      return;
+    }
+
     import('xlsx').then((XLSX) => {
       const data = parseResult.data.map((row: any) => [
         row.externalCode || '',
@@ -98,24 +132,119 @@ export default function Home() {
         row.remarks || ''
       ]);
 
-      // 创建带有表头的工作表
       const worksheet = XLSX.utils.aoa_to_sheet([
         ['外部编码', '收货门店', '收件人', '电话', '地址', 'SKU 编码', 'SKU 名称', '数量', '规格', '备注'],
         ...data
       ]);
 
-      // 设置列宽
       worksheet['!cols'] = [
         { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 },
         { wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 15 }, { wch: 30 }
       ];
 
-      // 创建工作簿并下载
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, '运单数据');
       XLSX.writeFile(workbook, `运单数据_${new Date().toLocaleString('zh-CN').replace(/[\/:]/g, '-')}.xlsx`);
+      
+      toast.success('Excel 导出成功！');
     });
   };
+
+  const handleSubmit = async () => {
+    if (!parseResult?.data) {
+      toast.warning('没有可提交的数据');
+      return;
+    }
+
+    // 先校验数据
+    const errors = validateShipmentData(parseResult.data);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      toast.error(`存在 ${errors.length} 个错误，请修正后提交`);
+      return;
+    }
+
+    setSubmitting(true);
+    setUploading(true);
+    setProgress(0);
+
+    try {
+      const response = await fetch('/api/shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shipments: parseResult.data,
+          ruleId: selectedRule
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        toast.error(`提交失败：${result.error}`);
+        return;
+      }
+
+      setProgress(100);
+      toast.success(`提交成功！共 ${result.data.count} 条运单`);
+      setParseResult(null);
+    } catch (error) {
+      console.error('Submit error:', error);
+      toast.error('提交失败，请重试');
+    } finally {
+      setSubmitting(false);
+      setUploading(false);
+    }
+  };
+
+  const handleCellEdit = (rowIndex: number, field: string, value: string | number) => {
+    if (!parseResult?.data) return;
+
+    const newData = [...parseResult.data];
+    newData[rowIndex] = { ...newData[rowIndex], [field]: value };
+    setParseResult({ ...parseResult, data: newData });
+
+    // 重新校验
+    const errors = validateShipmentData(newData);
+    setValidationErrors(errors);
+  };
+
+  const handleAddRow = () => {
+    if (!parseResult) return;
+    const newRow = { skuCode: '', skuName: '', skuQuantity: 0 };
+    setParseResult({
+      ...parseResult,
+      data: [...(parseResult.data || []), newRow],
+      totalRows: parseResult.totalRows + 1
+    });
+    toast.info('已添加空行');
+  };
+
+  const handleDeleteRow = (index: number) => {
+    if (!parseResult?.data) return;
+    const newData = parseResult.data.filter((_: any, i: number) => i !== index);
+    setParseResult({
+      ...parseResult,
+      data: newData,
+      totalRows: parseResult.totalRows - 1
+    });
+    toast.success('已删除该行');
+  };
+
+  const hasError = useCallback((row: number, field: string) => {
+    return validationErrors.some(e => e.row === row && e.field === field as any);
+  }, [validationErrors]);
+
+  const getErrorMessage = useCallback((row: number, field: string) => {
+    const errors = getFieldErrors(validationErrors, row, field as any);
+    return errors[0]?.message || '';
+  }, [validationErrors]);
+
+  // 使用 useMemo 优化大数据渲染
+  const tableRows = useMemo(() => {
+    if (!parseResult?.data) return [];
+    return parseResult.data.slice(0, 100); // 限制渲染
+  }, [parseResult?.data]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -178,18 +307,8 @@ export default function Home() {
               <option value="rule4">黔寨寨配送单</option>
             </select>
             <div className="mt-3 flex gap-3">
-              <a 
-                href="/rules/new"
-                className="text-primary hover:underline text-sm"
-              >
-                新建规则
-              </a>
-              <a 
-                href="/rules"
-                className="text-primary hover:underline text-sm"
-              >
-                管理规则
-              </a>
+              <a href="/rules/new" className="text-primary hover:underline text-sm">新建规则</a>
+              <a href="/rules" className="text-primary hover:underline text-sm">管理规则</a>
             </div>
           </div>
         )}
@@ -198,90 +317,187 @@ export default function Home() {
         {uploading && (
           <div className="mt-6">
             <div className="h-2 bg-primary-light rounded-full overflow-hidden">
-              <div className="h-full bg-primary animate-pulse w-1/3"></div>
+              <div 
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
             </div>
-            <p className="text-sm text-text-muted mt-2 text-center">正在解析文件...</p>
+            <p className="text-sm text-text-muted mt-2 text-center">
+              {progress < 100 ? '正在解析文件...' : '解析完成！'}
+            </p>
           </div>
         )}
       </div>
 
       {/* 数据预览区域 */}
       {parseResult && (
-        <>
-          <div className="card mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                数据预览
-              </h2>
-              <div className="flex gap-3">
-                <button 
-                  className="btn-primary flex items-center gap-2"
-                  onClick={exportToExcel}
-                >
-                  <Download className="w-4 h-4" />
-                  导出 Excel
-                </button>
-                <button 
-                  className="btn-primary flex items-center gap-2"
-                  style={{background: 'var(--success)'}}
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  提交下单
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    {['外部编码', '收货门店', '收件人', '电话', '地址', 'SKU 编码', 'SKU 名称', '数量', '规格', '备注'].map((header) => (
-                      <th key={header} className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold">
-                        {header}
-                      </th>
-                    ))}
-                    <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold">
-                      操作
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parseResult.data.map((row: any, index: number) => (
-                    <tr key={index} className="hover:bg-surface-hover">
-                      <td className="p-3 border border-border">{row.externalCode || '-'}</td>
-                      <td className="p-3 border border-border">{row.storeName || '-'}</td>
-                      <td className="p-3 border border-border">{row.receiverName || '-'}</td>
-                      <td className="p-3 border border-border">{row.receiverPhone || '-'}</td>
-                      <td className="p-3 border border-border">{row.receiverAddress || '-'}</td>
-                      <td className="p-3 border border-border">{row.skuCode}</td>
-                      <td className="p-3 border border-border">{row.skuName}</td>
-                      <td className="p-3 border border-border">{row.skuQuantity}</td>
-                      <td className="p-3 border border-border">{row.skuSpecification || '-'}</td>
-                      <td className="p-3 border border-border">{row.remarks || '-'}</td>
-                      <td className="p-3 border border-border">
-                        <button className="text-danger hover:underline flex items-center gap-1">
-                          <Trash2 className="w-4 h-4" />
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex justify-between items-center">
-              <div className="text-sm text-text-muted">
-                共 {parseResult.totalRows} 条，有效 {parseResult.validRows} 条
-              </div>
-              <button className="flex items-center gap-2 text-primary hover:underline">
-                <Plus className="w-4 h-4" />
-                新增空行
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              数据预览{validationErrors.length > 0 && `（发现${validationErrors.length}个错误）`}
+            </h2>
+            <div className="flex gap-3">
+              <button 
+                className="btn-primary flex items-center gap-2"
+                onClick={handleValidate}
+              >
+                <CheckCircle className="w-4 h-4" />
+                数据校验
+              </button>
+              <button 
+                className="btn-primary flex items-center gap-2"
+                onClick={handleExportExcel}
+              >
+                <Download className="w-4 h-4" />
+                导出 Excel
+              </button>
+              <button 
+                className="btn-primary flex items-center gap-2"
+                onClick={handleSubmit}
+                disabled={submitting || uploading}
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                提交下单
               </button>
             </div>
           </div>
-        </>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">操作</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">外部编码</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">收货门店</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">收件人</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">电话</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">地址</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">SKU 编码</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">SKU 名称</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-center border border-border font-semibold sticky top-0">数量</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">规格</th>
+                  <th className="bg-primary-light text-primary-dark p-3 text-left border border-border font-semibold sticky top-0">备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row: any, index: number) => (
+                  <tr key={index} className={`hover:bg-surface-hover ${validationErrors.filter(e => e.row === index).length > 0 ? 'bg-red-50' : ''}`}>
+                    <td className="p-2 border border-border sticky left-0 bg-white">
+                      <button 
+                        onClick={() => handleDeleteRow(index)}
+                        className="text-danger hover:underline flex items-center gap-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'externalCode') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.externalCode || ''}
+                        onChange={(e) => handleCellEdit(index, 'externalCode', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                      {hasError(index, 'externalCode') && (
+                        <div className="text-xs text-danger mt-1">{getErrorMessage(index, 'externalCode')}</div>
+                      )}
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'storeName') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.storeName || ''}
+                        onChange={(e) => handleCellEdit(index, 'storeName', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'receiverName') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.receiverName || ''}
+                        onChange={(e) => handleCellEdit(index, 'receiverName', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'receiverPhone') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.receiverPhone || ''}
+                        onChange={(e) => handleCellEdit(index, 'receiverPhone', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'receiverAddress') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.receiverAddress || ''}
+                        onChange={(e) => handleCellEdit(index, 'receiverAddress', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'skuCode') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.skuCode || ''}
+                        onChange={(e) => handleCellEdit(index, 'skuCode', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'skuName') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.skuName || ''}
+                        onChange={(e) => handleCellEdit(index, 'skuName', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border text-center ${hasError(index, 'skuQuantity') ? 'error-cell' : ''}`}>
+                      <input
+                        type="number"
+                        value={row.skuQuantity || ''}
+                        onChange={(e) => handleCellEdit(index, 'skuQuantity', parseInt(e.target.value) || 0)}
+                        className="w-20 border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1 text-center"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'skuSpecification') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.skuSpecification || ''}
+                        onChange={(e) => handleCellEdit(index, 'skuSpecification', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                    <td className={`p-2 border border-border ${hasError(index, 'remarks') ? 'error-cell' : ''}`}>
+                      <input
+                        type="text"
+                        value={row.remarks || ''}
+                        onChange={(e) => handleCellEdit(index, 'remarks', e.target.value)}
+                        className="w-full border-none focus:outline-none focus:ring-1 focus:ring-primary px-2 py-1"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 flex justify-between items-center">
+            <div className="text-sm text-text-muted">
+              共 {parseResult.totalRows} 条，当前显示前 100 条（{parseResult.validRows || parseResult.totalRows} 条有效）
+              {validationErrors.length > 0 && (
+                <span className="text-danger ml-2">
+                  {validationErrors.length} 个错误待修正
+                </span>
+              )}
+            </div>
+            <button 
+              onClick={handleAddRow}
+              className="flex items-center gap-2 text-primary hover:underline"
+            >
+              <Plus className="w-4 h-4" />
+              新增空行
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 演示文件说明 */}
