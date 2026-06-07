@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     // 调试环境变量
-    console.log('=== 环境变量检查 ===');
-    console.log('DATABASE_URL:', process.env.DATABASE_URL ? `存在，长度=${process.env.DATABASE_URL.length}` : '不存在');
-    console.log('DATABASE_URL preview:', process.env.DATABASE_URL?.substring(0, 30) + '...');
+    const envCheck = {
+      DATABASE_URL_set: !!process.env.DATABASE_URL,
+      DATABASE_URL_length: process.env.DATABASE_URL?.length || 0,
+      DATABASE_URL_preview: process.env.DATABASE_URL?.substring(0, 30) + '...',
+    };
     
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -178,6 +180,7 @@ export async function POST(request: NextRequest) {
         shipments,
         totalRows: shipments.length,
         validRows: shipments.filter(s => s.skuCode && s.skuName).length,
+        env: envCheck,
         debug: {
           sheetCount: fileExt === 'xlsx' ? '查看控制台日志' : 'N/A',
           fileExt,
@@ -187,7 +190,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Upload error:', error);
     return NextResponse.json(
-      { success: false, error: '解析失败：' + (error as Error).message },
+      { 
+        success: false, 
+        error: '解析失败：' + (error as Error).message,
+        env: envCheck,
+      },
       { status: 500 }
     );
   }
