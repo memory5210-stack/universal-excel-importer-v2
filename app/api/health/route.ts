@@ -3,6 +3,10 @@ import { getPrisma } from '@/lib/db/client';
 
 export async function GET() {
   try {
+    console.log('[Health] DATABASE_URL 是否存在:', !!process.env.DATABASE_URL)
+    console.log('[Health] DATABASE_URL 长度:', process.env.DATABASE_URL?.length || 0)
+    console.log('[Health] 其他环境变量:', Object.keys(process.env).filter(k => k.includes('DATABASE')).join(', '))
+    
     const prisma = getPrisma();
     
     // 尝试连接数据库
