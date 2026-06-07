@@ -47,62 +47,87 @@ export async function POST(request: NextRequest) {
 
         if (rawData.length === 0) continue;
 
-        // 查找表头行 - 找包含数据列最多的行
+        // 查找表头行 - 智能检测
         let headerRowIndex = 0;
         let headers: string[] = [];
+        let foundHeader = false;
+
+        // 典型表头关键词（中英文）
+        const headerKeywords = [
+          'sku', '商品', '产品', '货品', '单品',
+          '编码', '货号', '款号', 'code',
+          '名称', '品名', 'name',
+          '数量', '件数', 'qty', 'quantity', 'num',
+          '规格', '型号', 'size', 'spec',
+          '门店', '店铺', '仓库', 'store', 'warehouse',
+          '收货人', '收件人', '客户', '姓名',
+          '电话', '手机', 'contact', 'phone',
+          '地址', 'address'
+        ];
 
         for (let i = 0; i < Math.min(rawData.length, 15); i++) {
           const row = rawData[i];
           const nonEmptyCount = row.filter((c: any) => c && String(c).trim().length > 0).length;
           
           // 跳过空行或只有 1-2 个值的行
-          if (nonEmptyCount < 3) continue;
+          if (nonEmptyCount < 2) continue;
           
           const rowStr = row.join(' ').toLowerCase();
           
-          // 优先找包含典型表头关键词的行
-          const isHeaderRow = rowStr.includes('sku') || rowStr.includes('编码') || rowStr.includes('名称') || 
-                              rowStr.includes('数量') || rowStr.includes('单品') || rowStr.includes('货品') ||
-                              rowStr.includes('商品') || rowStr.includes('规格') || rowStr.includes('门店');
+          // 统计匹配到的关键词数量
+          const matchCount = headerKeywords.filter(k => rowStr.includes(k)).length;
           
-          if (isHeaderRow) {
+          // 如果匹配到 2 个以上关键词，认为是表头
+          if (matchCount >= 2) {
             headerRowIndex = i;
             headers = row.map((h: any) => String(h || '').trim());
-            console.log('找到表头在第', i, '行，表头:', headers);
+            console.log('找到表头在第', i, '行，匹配', matchCount, '个关键词，表头:', headers);
+            foundHeader = true;
             break;
           }
           
-          // 如果前 3 行都没有典型表头，使用非空单元格最多的行
-          if (i === 0 || nonEmptyCount > headers.length) {
+          // 如果没有找到典型表头，选择非空单元格最多的行
+          if (!foundHeader && (i === 0 || nonEmptyCount > headers.length)) {
             headerRowIndex = i;
             headers = row.map((h: any) => String(h || '').trim());
           }
         }
 
-        if (headers.length === 0 && rawData.length > 0) {
-          headers = rawData[0].map((h: any) => String(h || '').trim());
-          console.log('使用第一行作为表头:', headers);
+        if (!foundHeader && rawData.length > 0 && headers.length > 0) {
+          console.log('使用非空单元格最多的行作为表头 (行', headerRowIndex + '):', headers);
         }
 
-        // 字段映射
+        // 字段映射 - 扩展关键词匹配
         const findIndex = (candidates: string[]) => {
           for (let i = 0; i < headers.length; i++) {
-            const header = headers[i]?.toLowerCase() || '';
-            if (candidates.some(c => header.includes(c))) return i;
+            const header = (headers[i] || '').toLowerCase();
+            // 精确匹配或包含匹配
+            if (candidates.some(c => header === c || header.includes(c))) {
+              return i;
+            }
           }
           return -1;
         };
 
         const fieldIndex = {
-          skuCode: findIndex(['sku 编码', '商品编码', '产品编码', '货品编码', '货号', '款号', '编码', 'sku', 'code']),
-          skuName: findIndex(['sku 名称', '商品名称', '产品名称', '货品名称', '品名', '名称', 'name']),
-          skuQuantity: findIndex(['数量', '件数', '_qty', 'qty', 'Quantity', 'num']),
-          skuSpecification: findIndex(['规格', '型号', 'size', 'spec']),
-          externalCode: findIndex(['单号', '订单号', '外部编号', '外部编码', '单据号']),
-          storeName: findIndex(['门店', '店铺', '仓库', '超市', '库房', '店仓', 'store', 'warehouse']),
-          receiverName: findIndex(['收货人', '收件人', '客户', '顾客', '姓名']),
-          receiverPhone: findIndex(['电话', '手机', '联系方式', '手机号', 'phone', 'tel']),
-          receiverAddress: findIndex(['地址', '收货地址', '详细地址', 'address']),
+          // SKU 编码：匹配包含"编码"、"sku"、"code"、"货号"等的列
+          skuCode: findIndex(['sku 编码', '商品编码', '产品编码', '货品编码', '货号', '款号', '编码', 'sku', 'code', '商品 id', 'spu']),
+          // SKU 名称：匹配包含"名称"、"品名"、"name"等的列
+          skuName: findIndex(['sku 名称', '商品名称', '产品名称', '货品名称', '品名', '名称', 'name', '商品']),
+          // 数量：匹配包含"数量"、"qty"、"quantity"等的列
+          skuQuantity: findIndex(['数量', '件数', 'qty', 'quantity', 'num', '发货数', '出库数']),
+          // 规格：匹配包含"规格"、"型号"、"size"等的列
+          skuSpecification: findIndex(['规格', '型号', 'size', 'spec', '单位']),
+          // 外部编码：匹配包含"单号"、"订单号"等的列
+          externalCode: findIndex(['单号', '订单号', '外部编号', '外部编码', '单据号', '出库单号']),
+          // 门店：匹配包含"门店"、"店铺"、"仓库"等的列
+          storeName: findIndex(['门店', '店铺', '仓库', '超市', '库房', '店仓', 'store', 'warehouse', '品牌']),
+          // 收件人：匹配包含"收货人"、"收件人"、"姓名"等的列
+          receiverName: findIndex(['收货人', '收件人', '客户', '顾客', '姓名', '联系人']),
+          // 电话：匹配包含"电话"、"手机"、"联系方式"等的列
+          receiverPhone: findIndex(['电话', '手机', '联系方式', '手机号', 'phone', 'tel', '联系电话']),
+          // 地址：匹配包含"地址"、"收货地址"等的列
+          receiverAddress: findIndex(['地址', '收货地址', '详细地址', 'address', '配送地址']),
         };
 
         console.log('字段索引:', fieldIndex);
